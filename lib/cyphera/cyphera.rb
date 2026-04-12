@@ -63,8 +63,15 @@ module Cyphera
       @keys = {}
 
       (config['keys'] || {}).each do |name, val|
-        material = val.is_a?(String) ? val : val['material']
-        @keys[name] = [material].pack('H*')
+        if val.is_a?(String)
+          @keys[name] = [val].pack('H*')
+        elsif val['material']
+          @keys[name] = [val['material']].pack('H*')
+        elsif val['source']
+          @keys[name] = self.class.resolve_key_source(name, val)
+        else
+          raise ArgumentError, "Key '#{name}' must have either 'material' or 'source'"
+        end
       end
 
       (config['policies'] || {}).each do |name, pol|
@@ -101,6 +108,38 @@ module Cyphera
     def resolve_key(key_ref)
       raise ArgumentError, 'No key_ref in policy' if key_ref.nil? || key_ref.empty?
       @keys.fetch(key_ref) { raise ArgumentError, "Unknown key: #{key_ref}" }
+    end
+
+    CLOUD_SOURCES = %w[aws-kms gcp-kms azure-kv vault].freeze
+
+    def self.resolve_key_source(name, config)
+      source = config['source']
+
+      case source
+      when 'env'
+        var_name = config['var'] or raise ArgumentError, "Key '#{name}': source 'env' requires 'var' field"
+        val = ENV[var_name] or raise ArgumentError, "Key '#{name}': environment variable '#{var_name}' is not set"
+        encoding = config['encoding'] || 'hex'
+        return encoding == 'base64' ? val.unpack1('m') : [val].pack('H*')
+      when 'file'
+        path = config['path'] or raise ArgumentError, "Key '#{name}': source 'file' requires 'path' field"
+        raw = File.read(path).strip
+        encoding = config['encoding'] || (path.end_with?('.b64', '.base64') ? 'base64' : 'hex')
+        return encoding == 'base64' ? raw.unpack1('m') : [raw].pack('H*')
+      end
+
+      if CLOUD_SOURCES.include?(source)
+        begin
+          require 'cyphera-keychain'
+          return CypheraKeychain.resolve(source, config)
+        rescue LoadError
+          raise LoadError,
+            "Key '#{name}' requires source '#{source}' but cyphera-keychain is not installed.\n" \
+            "Install it: gem install cyphera-keychain"
+        end
+      end
+
+      raise ArgumentError, "Key '#{name}': unknown source '#{source}'. Valid: env, file, #{CLOUD_SOURCES.join(', ')}"
     end
 
     def resolve_alphabet(name)
