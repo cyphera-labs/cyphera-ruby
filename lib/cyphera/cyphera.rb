@@ -42,7 +42,7 @@ module Cyphera
     def access(protected_value, policy_name = nil)
       if policy_name
         policy = get_policy(policy_name)
-        return access_fpe(protected_value, policy)
+        return access_fpe(protected_value, policy, explicit_policy: true)
       end
 
       @tag_index.keys.sort_by { |t| -t.length }.each do |tag|
@@ -167,7 +167,7 @@ module Cyphera
       end
     end
 
-    def access_fpe(protected_value, policy)
+    def access_fpe(protected_value, policy, explicit_policy: false)
       unless %w[ff1 ff3].include?(policy['engine'])
         raise ArgumentError, "Cannot reverse '#{policy['engine']}' — not reversible"
       end
@@ -176,7 +176,7 @@ module Cyphera
       alphabet = policy['alphabet']
 
       without_tag = protected_value
-      if policy['tag_enabled'] && policy['tag']
+      if !explicit_policy && policy['tag_enabled'] && policy['tag']
         without_tag = protected_value[policy['tag'].length..]
       end
 
