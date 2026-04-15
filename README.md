@@ -1,6 +1,7 @@
 # cyphera
 
 [![CI](https://github.com/cyphera-labs/cyphera-ruby/actions/workflows/ci.yml/badge.svg)](https://github.com/cyphera-labs/cyphera-ruby/actions/workflows/ci.yml)
+[![Security](https://github.com/cyphera-labs/cyphera-ruby/actions/workflows/codeql.yml/badge.svg)](https://github.com/cyphera-labs/cyphera-ruby/actions/workflows/codeql.yml)
 [![Gem](https://img.shields.io/gem/v/cyphera)](https://rubygems.org/gems/cyphera)
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue)](LICENSE)
 
