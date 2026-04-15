@@ -37,6 +37,8 @@ module Cyphera
     end
 
     def aes_ecb(block)
+      # NIST SP 800-38G requires AES-ECB as the PRF for FF1/FF3 Feistel rounds.
+      # This is single-block encryption used as a building block, not ECB mode applied to user data.
       cipher = OpenSSL::Cipher::AES.new(@key.bytesize * 8, :ECB)
       cipher.encrypt
       cipher.padding = 0
