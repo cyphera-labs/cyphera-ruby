@@ -12,11 +12,11 @@ module Cyphera
 
   class Client
     def self.load
-      env = ENV['CYPHERA_POLICY_FILE']
+      env = ENV['CYPHERA_CONFIG_FILE']
       return from_file(env) if env && File.exist?(env)
       return from_file('cyphera.json') if File.exist?('cyphera.json')
       return from_file('/etc/cyphera/cyphera.json') if File.exist?('/etc/cyphera/cyphera.json')
-      raise 'No policy file found. Checked: CYPHERA_POLICY_FILE env, ./cyphera.json, /etc/cyphera/cyphera.json'
+      raise 'No configuration file found. Checked: CYPHERA_CONFIG_FILE env, ./cyphera.json, /etc/cyphera/cyphera.json'
     end
 
     def self.from_file(path)
@@ -28,38 +28,42 @@ module Cyphera
       new(config)
     end
 
-    def protect(value, policy_name)
-      policy = get_policy(policy_name)
-      case policy['engine']
-      when 'ff1' then protect_fpe(value, policy, false)
-      when 'ff3' then protect_fpe(value, policy, true)
-      when 'mask' then protect_mask(value, policy)
-      when 'hash' then protect_hash(value, policy)
-      else raise ArgumentError, "Unknown engine: #{policy['engine']}"
+    def protect(value, configuration_name)
+      configuration = get_configuration(configuration_name)
+      case configuration['engine']
+      when 'ff1' then protect_fpe(value, configuration, false)
+      when 'ff3' then protect_fpe(value, configuration, true)
+      when 'mask' then protect_mask(value, configuration)
+      when 'hash' then protect_hash(value, configuration)
+      else raise ArgumentError, "Unknown engine: #{configuration['engine']}"
       end
     end
 
-    def access(protected_value, policy_name = nil)
-      if policy_name
-        policy = get_policy(policy_name)
-        return access_fpe(protected_value, policy, explicit_policy: true)
+    def access(protected_value, configuration_name = nil)
+      if configuration_name
+        configuration = get_configuration(configuration_name)
+        return access_fpe(protected_value, configuration, explicit_configuration: true)
       end
 
-      @tag_index.keys.sort_by { |t| -t.length }.each do |tag|
-        if protected_value.length > tag.length && protected_value.start_with?(tag)
-          policy = get_policy(@tag_index[tag])
-          return access_fpe(protected_value, policy)
+      access_by_header(protected_value)
+    end
+
+    def access_by_header(protected_value)
+      @header_index.keys.sort_by { |h| -h.length }.each do |header|
+        if protected_value.length > header.length && protected_value.start_with?(header)
+          configuration = get_configuration(@header_index[header])
+          return access_fpe(protected_value, configuration)
         end
       end
 
-      raise ArgumentError, 'No matching tag found. Use access(value, policy_name) for untagged values.'
+      raise ArgumentError, 'No matching header found. Use access(value, configuration_name) for values without a header.'
     end
 
     private
 
     def initialize(config)
-      @policies = {}
-      @tag_index = {}
+      @configurations = {}
+      @header_index = {}
       @keys = {}
 
       (config['keys'] || {}).each do |name, val|
@@ -74,39 +78,39 @@ module Cyphera
         end
       end
 
-      (config['policies'] || {}).each do |name, pol|
-        tag_enabled = pol.fetch('tag_enabled', true)
-        tag = pol['tag']
+      (config['configurations'] || {}).each do |name, cfg|
+        header_enabled = cfg.fetch('header_enabled', true)
+        header = cfg['header']
 
-        if tag_enabled && (tag.nil? || tag.empty?)
-          raise ArgumentError, "Policy '#{name}' has tag_enabled=true but no tag specified"
+        if header_enabled && (header.nil? || header.empty?)
+          raise ArgumentError, "Configuration '#{name}' has header_enabled=true but no header specified"
         end
 
-        if tag_enabled && tag
-          if @tag_index.key?(tag)
-            raise ArgumentError, "Tag collision: '#{tag}' used by both '#{@tag_index[tag]}' and '#{name}'"
+        if header_enabled && header
+          if @header_index.key?(header)
+            raise ArgumentError, "Header collision: '#{header}' used by both '#{@header_index[header]}' and '#{name}'"
           end
-          @tag_index[tag] = name
+          @header_index[header] = name
         end
 
-        @policies[name] = {
-          'engine' => pol.fetch('engine', 'ff1'),
-          'alphabet' => resolve_alphabet(pol['alphabet']),
-          'key_ref' => pol['key_ref'],
-          'tag' => tag,
-          'tag_enabled' => tag_enabled,
-          'pattern' => pol['pattern'],
-          'algorithm' => pol.fetch('algorithm', 'sha256')
+        @configurations[name] = {
+          'engine' => cfg.fetch('engine', 'ff1'),
+          'alphabet' => resolve_alphabet(cfg['alphabet']),
+          'key_ref' => cfg['key_ref'],
+          'header' => header,
+          'header_enabled' => header_enabled,
+          'pattern' => cfg['pattern'],
+          'algorithm' => cfg.fetch('algorithm', 'sha256')
         }
       end
     end
 
-    def get_policy(name)
-      @policies.fetch(name) { raise ArgumentError, "Unknown policy: #{name}" }
+    def get_configuration(name)
+      @configurations.fetch(name) { raise ArgumentError, "Unknown configuration: #{name}" }
     end
 
     def resolve_key(key_ref)
-      raise ArgumentError, 'No key_ref in policy' if key_ref.nil? || key_ref.empty?
+      raise ArgumentError, 'No key_ref in configuration' if key_ref.nil? || key_ref.empty?
       @keys.fetch(key_ref) { raise ArgumentError, "Unknown key: #{key_ref}" }
     end
 
@@ -147,9 +151,9 @@ module Cyphera
       ALPHABETS[name] || name
     end
 
-    def protect_fpe(value, policy, is_ff3)
-      key = resolve_key(policy['key_ref'])
-      alphabet = policy['alphabet']
+    def protect_fpe(value, configuration, is_ff3)
+      key = resolve_key(configuration['key_ref'])
+      alphabet = configuration['alphabet']
       encryptable, positions, chars = extract_passthroughs(value, alphabet)
       raise ArgumentError, 'No encryptable characters in input' if encryptable.empty?
 
@@ -160,29 +164,29 @@ module Cyphera
       end
 
       result = reinsert_passthroughs(encrypted, positions, chars)
-      if policy['tag_enabled'] && policy['tag']
-        policy['tag'] + result
+      if configuration['header_enabled'] && configuration['header']
+        configuration['header'] + result
       else
         result
       end
     end
 
-    def access_fpe(protected_value, policy, explicit_policy: false)
-      unless %w[ff1 ff3].include?(policy['engine'])
-        raise ArgumentError, "Cannot reverse '#{policy['engine']}' — not reversible"
+    def access_fpe(protected_value, configuration, explicit_configuration: false)
+      unless %w[ff1 ff3].include?(configuration['engine'])
+        raise ArgumentError, "Cannot reverse '#{configuration['engine']}' — not reversible"
       end
 
-      key = resolve_key(policy['key_ref'])
-      alphabet = policy['alphabet']
+      key = resolve_key(configuration['key_ref'])
+      alphabet = configuration['alphabet']
 
-      without_tag = protected_value
-      if !explicit_policy && policy['tag_enabled'] && policy['tag']
-        without_tag = protected_value[policy['tag'].length..]
+      without_header = protected_value
+      if !explicit_configuration && configuration['header_enabled'] && configuration['header']
+        without_header = protected_value[configuration['header'].length..]
       end
 
-      encryptable, positions, chars = extract_passthroughs(without_tag, alphabet)
+      encryptable, positions, chars = extract_passthroughs(without_header, alphabet)
 
-      decrypted = if policy['engine'] == 'ff3'
+      decrypted = if configuration['engine'] == 'ff3'
         FF3.new(key, "\x00" * 8, alphabet).decrypt(encryptable)
       else
         FF1.new(key, '', alphabet).decrypt(encryptable)
@@ -191,9 +195,9 @@ module Cyphera
       reinsert_passthroughs(decrypted, positions, chars)
     end
 
-    def protect_mask(value, policy)
-      pattern = policy['pattern']
-      raise ArgumentError, "Mask policy requires 'pattern'" if pattern.nil? || pattern.empty?
+    def protect_mask(value, configuration)
+      pattern = configuration['pattern']
+      raise ArgumentError, "Mask configuration requires 'pattern'" if pattern.nil? || pattern.empty?
       len = value.length
       case pattern
       when 'last4', 'last_4' then ('*' * [0, len - 4].max) + value[[0, len - 4].max..]
@@ -204,17 +208,17 @@ module Cyphera
       end
     end
 
-    def protect_hash(value, policy)
-      algo = policy['algorithm'].downcase.delete('-')
+    def protect_hash(value, configuration)
+      algo = configuration['algorithm'].downcase.delete('-')
       digest = case algo
       when 'sha256' then 'SHA256'
       when 'sha384' then 'SHA384'
       when 'sha512' then 'SHA512'
-      else raise ArgumentError, "Unsupported hash algorithm: #{policy['algorithm']}"
+      else raise ArgumentError, "Unsupported hash algorithm: #{configuration['algorithm']}"
       end
 
-      if policy['key_ref'] && !policy['key_ref'].empty?
-        key = resolve_key(policy['key_ref'])
+      if configuration['key_ref'] && !configuration['key_ref'].empty?
+        key = resolve_key(configuration['key_ref'])
         OpenSSL::HMAC.hexdigest(digest, key, value)
       else
         OpenSSL::Digest.hexdigest(digest, value)

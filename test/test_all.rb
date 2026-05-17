@@ -38,17 +38,17 @@ end
 class TestSDK < Minitest::Test
   def setup
     @c = Cyphera::Client.from_config({
-      'policies' => {
-        'ssn' => { 'engine' => 'ff1', 'key_ref' => 'test-key', 'tag' => 'T01' },
-        'ssn_digits' => { 'engine' => 'ff1', 'alphabet' => 'digits', 'tag_enabled' => false, 'key_ref' => 'test-key' },
-        'ssn_mask' => { 'engine' => 'mask', 'pattern' => 'last4', 'tag_enabled' => false },
-        'ssn_hash' => { 'engine' => 'hash', 'algorithm' => 'sha256', 'key_ref' => 'test-key', 'tag_enabled' => false }
+      'configurations' => {
+        'ssn' => { 'engine' => 'ff1', 'key_ref' => 'test-key', 'header' => 'T01' },
+        'ssn_digits' => { 'engine' => 'ff1', 'alphabet' => 'digits', 'header_enabled' => false, 'key_ref' => 'test-key' },
+        'ssn_mask' => { 'engine' => 'mask', 'pattern' => 'last4', 'header_enabled' => false },
+        'ssn_hash' => { 'engine' => 'hash', 'algorithm' => 'sha256', 'key_ref' => 'test-key', 'header_enabled' => false }
       },
       'keys' => { 'test-key' => { 'material' => '2B7E151628AED2A6ABF7158809CF4F3C' } }
     })
   end
 
-  def test_protect_access_tag
+  def test_protect_access_header
     p = @c.protect('123456789', 'ssn')
     assert p.start_with?('T01')
     assert_equal '123456789', @c.access(p)
@@ -60,7 +60,7 @@ class TestSDK < Minitest::Test
     assert_equal '123-45-6789', @c.access(p)
   end
 
-  def test_untagged
+  def test_no_header
     p = @c.protect('123456789', 'ssn_digits')
     assert_equal 9, p.length
     assert_equal '123456789', @c.access(p, 'ssn_digits')
@@ -85,5 +85,10 @@ class TestSDK < Minitest::Test
 
   def test_cross_language_vector
     assert_equal 'T01i6J-xF-07pX', @c.protect('123-45-6789', 'ssn')
+  end
+
+  def test_access_by_header_explicit
+    p = @c.protect('123-45-6789', 'ssn')
+    assert_equal '123-45-6789', @c.access_by_header(p)
   end
 end
