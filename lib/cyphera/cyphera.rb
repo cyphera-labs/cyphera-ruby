@@ -42,7 +42,13 @@ module Cyphera
     def access(protected_value, configuration_name = nil)
       if configuration_name
         configuration = get_configuration(configuration_name)
-        return access_fpe(protected_value, configuration, explicit_configuration: true)
+        if configuration['header_enabled']
+          raise ArgumentError,
+            "configuration '#{configuration_name}' has header_enabled=true; use access(value) — " \
+            'the header identifies the configuration. The two-arg form is for ' \
+            'header_enabled=false configurations only.'
+        end
+        return access_fpe(protected_value, configuration)
       end
 
       access_by_header(protected_value)
@@ -52,11 +58,12 @@ module Cyphera
       @header_index.keys.sort_by { |h| -h.length }.each do |header|
         if protected_value.length > header.length && protected_value.start_with?(header)
           configuration = get_configuration(@header_index[header])
-          return access_fpe(protected_value, configuration)
+          stripped = protected_value[header.length..]
+          return access_fpe(stripped, configuration)
         end
       end
 
-      raise ArgumentError, 'No matching header found. Use access(value, configuration_name) for values without a header.'
+      raise ArgumentError, 'No matching header found. Use access(value, configuration_name) for headerless values.'
     end
 
     private
@@ -171,7 +178,11 @@ module Cyphera
       end
     end
 
-    def access_fpe(protected_value, configuration, explicit_configuration: false)
+    # Reverses an FPE-protected value. Assumes the input is already
+    # header-stripped (or that the configuration has header_enabled=false).
+    # Callers: access() routes here after the header_enabled=false check;
+    # access_by_header() strips the header itself before calling.
+    def access_fpe(protected_value, configuration)
       unless %w[ff1 ff3].include?(configuration['engine'])
         raise ArgumentError, "Cannot reverse '#{configuration['engine']}' — not reversible"
       end
@@ -179,12 +190,7 @@ module Cyphera
       key = resolve_key(configuration['key_ref'])
       alphabet = configuration['alphabet']
 
-      without_header = protected_value
-      if !explicit_configuration && configuration['header_enabled'] && configuration['header']
-        without_header = protected_value[configuration['header'].length..]
-      end
-
-      encryptable, positions, chars = extract_passthroughs(without_header, alphabet)
+      encryptable, positions, chars = extract_passthroughs(protected_value, alphabet)
 
       decrypted = if configuration['engine'] == 'ff3'
         FF3.new(key, "\x00" * 8, alphabet).decrypt(encryptable)

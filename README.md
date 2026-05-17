@@ -29,6 +29,12 @@ protected = c.protect('123-45-6789', 'ssn')
 # Access (header-based, no configuration name needed)
 accessed = c.access(protected)
 # → "123-45-6789"
+
+# Two-arg access is for header_enabled=false configurations only.
+# Calling it on a headered configuration raises ArgumentError —
+# use the single-arg form so the header identifies the configuration.
+raw = c.protect('123456789', 'ssn_digits')   # header_enabled=false
+plain = c.access(raw, 'ssn_digits')          # → "123456789"
 ```
 
 ## Engines
