@@ -51,13 +51,13 @@ class TestSDK < Minitest::Test
   def test_protect_access_header
     p = @c.protect('123456789', 'ssn')
     assert p.start_with?('T01')
-    assert_equal '123456789', @c.access(p)
+    assert_equal '123456789', @c.access_by_header(p)
   end
 
   def test_passthroughs
     p = @c.protect('123-45-6789', 'ssn')
     assert_includes p, '-'
-    assert_equal '123-45-6789', @c.access(p)
+    assert_equal '123-45-6789', @c.access_by_header(p)
   end
 
   def test_no_header

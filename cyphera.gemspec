@@ -1,6 +1,6 @@
 Gem::Specification.new do |s|
   s.name        = 'cyphera'
-  s.version     = '0.0.1.alpha.2'
+  s.version     = '0.0.1.alpha.3'
   s.summary     = 'Data protection SDK — format-preserving encryption (FF1/FF3), data masking, and hashing.'
   s.description = 'Cyphera is an open-source data protection SDK for Ruby. Format-preserving encryption (FF1/FF3), data masking, and hashing. Configuration-driven protect/access API. Cross-language compatible.'
   s.authors     = ['Horizon Digital Engineering']

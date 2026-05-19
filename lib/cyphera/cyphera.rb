@@ -39,19 +39,15 @@ module Cyphera
       end
     end
 
-    def access(protected_value, configuration_name = nil)
-      if configuration_name
-        configuration = get_configuration(configuration_name)
-        if configuration['header_enabled']
-          raise ArgumentError,
-            "configuration '#{configuration_name}' has header_enabled=true; use access(value) — " \
-            'the header identifies the configuration. The two-arg form is for ' \
-            'header_enabled=false configurations only.'
-        end
-        return access_fpe(protected_value, configuration)
+    def access(protected_value, configuration_name)
+      configuration = get_configuration(configuration_name)
+      if configuration['header_enabled']
+        raise ArgumentError,
+          "configuration '#{configuration_name}' has header_enabled=true; use access_by_header(value) — " \
+          'the header identifies the configuration. The two-arg form is for ' \
+          'header_enabled=false configurations only.'
       end
-
-      access_by_header(protected_value)
+      access_fpe(protected_value, configuration)
     end
 
     def access_by_header(protected_value)
@@ -106,6 +102,7 @@ module Cyphera
           'key_ref' => cfg['key_ref'],
           'header' => header,
           'header_enabled' => header_enabled,
+          'header_length' => cfg.fetch('header_length', 3).to_i,
           'pattern' => cfg['pattern'],
           'algorithm' => cfg.fetch('algorithm', 'sha256')
         }
