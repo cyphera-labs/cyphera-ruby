@@ -13,6 +13,20 @@ module Cyphera
       @radix = alphabet.length
       @char_map = {}
       alphabet.each_char.with_index { |c, i| @char_map[c] = i }
+      # NIST FF3 maximum length: 2 * floor(log_radix(2^96)), exact arithmetic.
+      limit = 2**96
+      k = 0
+      k += 1 while @radix**(k + 1) <= limit
+      @max_len = 2 * k
+    end
+
+    # NIST SP 800-38G: length >= 2, radix^length >= 1,000,000, length <= max.
+    def check_length(n)
+      if n < 2 || @radix**n < 1_000_000
+        raise ArgumentError,
+              "input too short (NIST minimum: length >= 2 and radix^length >= 1,000,000)"
+      end
+      raise ArgumentError, "input too long (FF3 maximum for this radix is #{@max_len})" if n > @max_len
     end
 
     def encrypt(plaintext)
@@ -93,6 +107,7 @@ module Cyphera
 
     def ff3_encrypt(pt)
       n = pt.length
+      check_length(n)
       u = (n + 1) / 2
       v = n - u
       a = pt[0...u].dup
@@ -121,6 +136,7 @@ module Cyphera
 
     def ff3_decrypt(ct)
       n = ct.length
+      check_length(n)
       u = (n + 1) / 2
       v = n - u
       a = ct[0...u].dup

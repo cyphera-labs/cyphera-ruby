@@ -82,8 +82,20 @@ module Cyphera
       result
     end
 
+    # NIST SP 800-38G: length >= 2 and radix^length >= 1,000,000.
+    def check_length(n)
+      if n < 2 || @radix**n < 1_000_000
+        raise ArgumentError,
+              "input too short (NIST minimum: length >= 2 and radix^length >= 1,000,000)"
+      end
+    end
+
     def compute_b(v)
-      (Math.log2(@radix) * v / 8.0).ceil
+      # NIST SP 800-38G: b = ceil(ceil(v*log2(radix))/8) with exact integer
+      # arithmetic. ceil(v*log2(radix)) is the bit length of radix^v - 1.
+      # Floating-point log2 is forbidden — rounding errors corrupt ciphertext.
+      bits = (@radix**v - 1).bit_length
+      (bits + 7) / 8
     end
 
     def build_p(u, n, t)
@@ -119,6 +131,7 @@ module Cyphera
 
     def ff1_encrypt(pt, t)
       n = pt.length
+      check_length(n)
       u = n / 2
       v = n - u
       a = pt[0...u]
@@ -146,6 +159,7 @@ module Cyphera
 
     def ff1_decrypt(ct, t)
       n = ct.length
+      check_length(n)
       u = n / 2
       v = n - u
       a = ct[0...u]
