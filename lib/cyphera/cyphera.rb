@@ -42,7 +42,22 @@ module Cyphera
     # figure out which one applies — it checks the leading bytes of
     # `protected_value` against the registered headers (longest first to avoid
     # prefix collisions), strips the matched header, and decrypts.
-    def access(protected_value)
+    #
+    # The optional `configuration_name` is an escape hatch for unique
+    # situations where the protected value has no header (mainframe formats,
+    # fixed-width legacy systems, etc.). When provided, the value is decrypted
+    # as raw headerless ciphertext using the named configuration. Prefer the
+    # 1-arg form for normal use; the 2-arg form is intentionally not pushed in
+    # examples.
+    def access(protected_value, configuration_name = nil)
+      if configuration_name
+        configuration = get_configuration(configuration_name)
+        unless %w[ff1 ff3 ff31].include?(configuration['engine'])
+          raise ArgumentError, "Cannot reverse '#{configuration['engine']}' — not reversible"
+        end
+        return access_fpe(protected_value, configuration)
+      end
+
       @header_index.keys.sort_by { |h| -h.length }.each do |header|
         if protected_value.length > header.length && protected_value.start_with?(header)
           configuration = get_configuration(@header_index[header])

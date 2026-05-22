@@ -26,10 +26,14 @@ c = Cyphera::Client.from_file('./config/cyphera.json')
 protected = c.protect('123-45-6789', 'ssn')
 # → "T01i6J-xF-07pX" (DPH-prefixed, dashes preserved)
 
-# Access — single 1-arg method; the SDK uses the header to identify the configuration
+# Access — the SDK uses the header to identify the configuration
 accessed = c.access(protected)
 # → "123-45-6789"
 ```
+
+For unusual cases where the protected value has no header (mainframe
+formats, fixed-width legacy systems), `access` also accepts an explicit
+configuration name: `c.access(value, 'configuration_name')`.
 
 ## Engines
 

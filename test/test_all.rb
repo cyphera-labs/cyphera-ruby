@@ -90,4 +90,15 @@ class TestSDK < Minitest::Test
     err = assert_raises(ArgumentError) { @c.access('zzznotaheader') }
     assert_match(/No matching header/, err.message)
   end
+
+  def test_access_with_explicit_configuration_name
+    # Escape hatch: headerless configuration round-trips when caller names it.
+    p = @c.protect('123456789', 'ssn_digits')
+    assert_equal '123456789', @c.access(p, 'ssn_digits')
+  end
+
+  def test_access_with_explicit_configuration_rejects_irreversible
+    err = assert_raises(ArgumentError) { @c.access('whatever', 'ssn_hash') }
+    assert_match(/not reversible/, err.message)
+  end
 end
