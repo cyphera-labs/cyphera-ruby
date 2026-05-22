@@ -51,19 +51,18 @@ class TestSDK < Minitest::Test
   def test_protect_access_header
     p = @c.protect('123456789', 'ssn')
     assert p.start_with?('T01')
-    assert_equal '123456789', @c.access_by_header(p)
+    assert_equal '123456789', @c.access(p)
   end
 
   def test_passthroughs
     p = @c.protect('123-45-6789', 'ssn')
     assert_includes p, '-'
-    assert_equal '123-45-6789', @c.access_by_header(p)
+    assert_equal '123-45-6789', @c.access(p)
   end
 
   def test_no_header
     p = @c.protect('123456789', 'ssn_digits')
     assert_equal 9, p.length
-    assert_equal '123456789', @c.access(p, 'ssn_digits')
   end
 
   def test_deterministic
@@ -87,19 +86,8 @@ class TestSDK < Minitest::Test
     assert_equal 'T01i6J-xF-07pX', @c.protect('123-45-6789', 'ssn')
   end
 
-  def test_access_by_header_explicit
-    p = @c.protect('123-45-6789', 'ssn')
-    assert_equal '123-45-6789', @c.access_by_header(p)
-  end
-
-  def test_two_arg_access_on_headered_config_raises
-    p = @c.protect('123-45-6789', 'ssn')
-    err = assert_raises(ArgumentError) { @c.access(p, 'ssn') }
-    assert_match(/header_enabled=true/, err.message)
-  end
-
-  def test_two_arg_access_on_headerless_config_works
-    p = @c.protect('123456789', 'ssn_digits')
-    assert_equal '123456789', @c.access(p, 'ssn_digits')
+  def test_access_no_matching_header_raises
+    err = assert_raises(ArgumentError) { @c.access('zzznotaheader') }
+    assert_match(/No matching header/, err.message)
   end
 end

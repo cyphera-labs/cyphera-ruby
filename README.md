@@ -26,15 +26,9 @@ c = Cyphera::Client.from_file('./config/cyphera.json')
 protected = c.protect('123-45-6789', 'ssn')
 # → "T01i6J-xF-07pX" (DPH-prefixed, dashes preserved)
 
-# Access (header-based, no configuration name needed)
+# Access — single 1-arg method; the SDK uses the header to identify the configuration
 accessed = c.access(protected)
 # → "123-45-6789"
-
-# Two-arg access is for header_enabled=false configurations only.
-# Calling it on a headered configuration raises ArgumentError —
-# use the single-arg form so the header identifies the configuration.
-raw = c.protect('123456789', 'ssn_digits')   # header_enabled=false
-plain = c.access(raw, 'ssn_digits')          # → "123456789"
 ```
 
 ## Engines
@@ -63,8 +57,7 @@ plain = c.access(raw, 'ssn_digits')          # → "123456789"
 
 The `header` (Data Protection Header, DPH) is a short prefix prepended to
 protected output that identifies the configuration used. It lets
-`access_by_header()` reverse a value without the caller naming the
-configuration.
+`access()` reverse a value without the caller naming the configuration.
 
 ## Cross-Language Compatible
 

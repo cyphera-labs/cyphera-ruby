@@ -38,18 +38,11 @@ module Cyphera
       end
     end
 
-    def access(protected_value, configuration_name)
-      configuration = get_configuration(configuration_name)
-      if configuration['header_enabled']
-        raise ArgumentError,
-          "configuration '#{configuration_name}' has header_enabled=true; use access_by_header(value) — " \
-          'the header identifies the configuration. The two-arg form is for ' \
-          'header_enabled=false configurations only.'
-      end
-      access_fpe(protected_value, configuration)
-    end
-
-    def access_by_header(protected_value)
+    # Reverse a protected value. The SDK uses the loaded configurations to
+    # figure out which one applies — it checks the leading bytes of
+    # `protected_value` against the registered headers (longest first to avoid
+    # prefix collisions), strips the matched header, and decrypts.
+    def access(protected_value)
       @header_index.keys.sort_by { |h| -h.length }.each do |header|
         if protected_value.length > header.length && protected_value.start_with?(header)
           configuration = get_configuration(@header_index[header])
@@ -58,7 +51,7 @@ module Cyphera
         end
       end
 
-      raise ArgumentError, 'No matching header found. Use access(value, configuration_name) for headerless values.'
+      raise ArgumentError, 'No matching header found.'
     end
 
     private
@@ -190,9 +183,7 @@ module Cyphera
     end
 
     # Reverses an FPE-protected value. Assumes the input is already
-    # header-stripped (or that the configuration has header_enabled=false).
-    # Callers: access() routes here after the header_enabled=false check;
-    # access_by_header() strips the header itself before calling.
+    # header-stripped. Called by access() after it strips the matched header.
     def access_fpe(protected_value, configuration)
       unless %w[ff1 ff3 ff31].include?(configuration['engine'])
         raise ArgumentError, "Cannot reverse '#{configuration['engine']}' — not reversible"
