@@ -147,4 +147,32 @@ module Cyphera
       a + b
     end
   end
+
+  # FF3-1 Format-Preserving Encryption (NIST SP 800-38G Revision 1).
+  #
+  # FF3-1 is FF3 with a 56-bit (7-byte) tweak. The tweak is expanded into the
+  # 64-bit form the FF3 round function consumes; the algorithm is identical FF3.
+  class FF31
+    def initialize(key, tweak, alphabet = '0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ')
+      unless tweak.bytesize == 7
+        raise ArgumentError, "FF3-1 tweak must be exactly 7 bytes (56 bits)"
+      end
+      @inner = FF3.new(key, FF31.expand_tweak(tweak), alphabet)
+    end
+
+    def encrypt(plaintext)
+      @inner.encrypt(plaintext)
+    end
+
+    def decrypt(ciphertext)
+      @inner.decrypt(ciphertext)
+    end
+
+    # Expand the 56-bit FF3-1 tweak into the 64-bit tweak the FF3 round
+    # function consumes (NIST SP 800-38G Rev 1): bytes[0,4] = T_L, [4,8] = T_R.
+    def self.expand_tweak(t)
+      b = t.bytes
+      [b[0], b[1], b[2], b[3] & 0xF0, b[4], b[5], b[6], (b[3] & 0x0F) << 4].pack('C*')
+    end
+  end
 end

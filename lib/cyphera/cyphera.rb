@@ -31,8 +31,7 @@ module Cyphera
     def protect(value, configuration_name)
       configuration = get_configuration(configuration_name)
       case configuration['engine']
-      when 'ff1' then protect_fpe(value, configuration, false)
-      when 'ff3' then protect_fpe(value, configuration, true)
+      when 'ff1', 'ff3', 'ff31' then protect_fpe(value, configuration)
       when 'mask' then protect_mask(value, configuration)
       when 'hash' then protect_hash(value, configuration)
       else raise ArgumentError, "Unknown engine: #{configuration['engine']}"
@@ -155,14 +154,29 @@ module Cyphera
       ALPHABETS[name] || name
     end
 
-    def protect_fpe(value, configuration, is_ff3)
+    @@ff3_warned = false
+
+    # Emit the FF3 deprecation warning to stderr, once per process. Original
+    # FF3 is cryptographically weak; configurations should use the 'ff31' engine.
+    def warn_ff3_deprecated
+      return if @@ff3_warned
+
+      @@ff3_warned = true
+      $stderr.puts "WARNING: engine 'ff3' is deprecated and cryptographically weak — migrate to 'ff31' (FF3-1)."
+    end
+
+    def protect_fpe(value, configuration)
       key = resolve_key(configuration['key_ref'])
       alphabet = configuration['alphabet']
       encryptable, positions, chars = extract_passthroughs(value, alphabet)
       raise ArgumentError, 'No encryptable characters in input' if encryptable.empty?
 
-      encrypted = if is_ff3
+      encrypted = case configuration['engine']
+      when 'ff3'
+        warn_ff3_deprecated
         FF3.new(key, "\x00" * 8, alphabet).encrypt(encryptable)
+      when 'ff31'
+        FF31.new(key, "\x00" * 7, alphabet).encrypt(encryptable)
       else
         FF1.new(key, '', alphabet).encrypt(encryptable)
       end
@@ -180,7 +194,7 @@ module Cyphera
     # Callers: access() routes here after the header_enabled=false check;
     # access_by_header() strips the header itself before calling.
     def access_fpe(protected_value, configuration)
-      unless %w[ff1 ff3].include?(configuration['engine'])
+      unless %w[ff1 ff3 ff31].include?(configuration['engine'])
         raise ArgumentError, "Cannot reverse '#{configuration['engine']}' — not reversible"
       end
 
@@ -189,8 +203,12 @@ module Cyphera
 
       encryptable, positions, chars = extract_passthroughs(protected_value, alphabet)
 
-      decrypted = if configuration['engine'] == 'ff3'
+      decrypted = case configuration['engine']
+      when 'ff3'
+        warn_ff3_deprecated
         FF3.new(key, "\x00" * 8, alphabet).decrypt(encryptable)
+      when 'ff31'
+        FF31.new(key, "\x00" * 7, alphabet).decrypt(encryptable)
       else
         FF1.new(key, '', alphabet).decrypt(encryptable)
       end
