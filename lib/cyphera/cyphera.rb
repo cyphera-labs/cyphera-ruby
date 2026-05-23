@@ -34,7 +34,7 @@ module Cyphera
       when 'ff1', 'ff3', 'ff31' then protect_fpe(value, configuration)
       when 'mask' then protect_mask(value, configuration)
       when 'hash' then protect_hash(value, configuration)
-      else raise ArgumentError, "Unknown engine: #{configuration['engine']}"
+      else raise ArgumentError, "unknown engine: #{configuration['engine']}"
       end
     end
 
@@ -52,8 +52,11 @@ module Cyphera
     def access(protected_value, configuration_name = nil)
       if configuration_name
         configuration = get_configuration(configuration_name)
-        unless %w[ff1 ff3 ff31].include?(configuration['engine'])
-          raise ArgumentError, "Cannot reverse '#{configuration['engine']}' — not reversible"
+        case configuration['engine']
+        when 'mask'
+          raise ArgumentError, "cannot reverse '#{configuration_name}' — mask is irreversible"
+        when 'hash'
+          raise ArgumentError, "cannot reverse '#{configuration_name}' — hash is irreversible"
         end
         return access_fpe(protected_value, configuration)
       end
@@ -66,7 +69,7 @@ module Cyphera
         end
       end
 
-      raise ArgumentError, 'No matching header found.'
+      raise ArgumentError, 'no matching header found'
     end
 
     private
@@ -93,12 +96,12 @@ module Cyphera
         header = cfg['header']
 
         if header_enabled && (header.nil? || header.empty?)
-          raise ArgumentError, "Configuration '#{name}' has header_enabled=true but no header specified"
+          raise ArgumentError, 'configuration error: header must be specified'
         end
 
         if header_enabled && header
           if @header_index.key?(header)
-            raise ArgumentError, "Header collision: '#{header}' used by both '#{@header_index[header]}' and '#{name}'"
+            raise ArgumentError, 'configuration error: header collision'
           end
           @header_index[header] = name
         end
@@ -117,12 +120,12 @@ module Cyphera
     end
 
     def get_configuration(name)
-      @configurations.fetch(name) { raise ArgumentError, "Unknown configuration: #{name}" }
+      @configurations.fetch(name) { raise ArgumentError, "configuration not found: #{name}" }
     end
 
     def resolve_key(key_ref)
-      raise ArgumentError, 'No key_ref in configuration' if key_ref.nil? || key_ref.empty?
-      @keys.fetch(key_ref) { raise ArgumentError, "Unknown key: #{key_ref}" }
+      raise ArgumentError, 'key error: no key_ref in configuration' if key_ref.nil? || key_ref.empty?
+      @keys.fetch(key_ref) { raise ArgumentError, "key error: unknown key '#{key_ref}'" }
     end
 
     CLOUD_SOURCES = %w[aws-kms gcp-kms azure-kv vault].freeze
@@ -177,7 +180,7 @@ module Cyphera
       key = resolve_key(configuration['key_ref'])
       alphabet = configuration['alphabet']
       encryptable, positions, chars = extract_passthroughs(value, alphabet)
-      raise ArgumentError, 'No encryptable characters in input' if encryptable.empty?
+      raise ArgumentError, 'no encryptable characters in input' if encryptable.empty?
 
       encrypted = case configuration['engine']
       when 'ff3'
@@ -200,10 +203,6 @@ module Cyphera
     # Reverses an FPE-protected value. Assumes the input is already
     # header-stripped. Called by access() after it strips the matched header.
     def access_fpe(protected_value, configuration)
-      unless %w[ff1 ff3 ff31].include?(configuration['engine'])
-        raise ArgumentError, "Cannot reverse '#{configuration['engine']}' — not reversible"
-      end
-
       key = resolve_key(configuration['key_ref'])
       alphabet = configuration['alphabet']
 
@@ -224,7 +223,7 @@ module Cyphera
 
     def protect_mask(value, configuration)
       pattern = configuration['pattern']
-      raise ArgumentError, "Mask configuration requires 'pattern'" if pattern.nil? || pattern.empty?
+      raise ArgumentError, 'mask pattern required' if pattern.nil? || pattern.empty?
       len = value.length
       case pattern
       when 'last4', 'last_4' then ('*' * [0, len - 4].max) + value[[0, len - 4].max..]

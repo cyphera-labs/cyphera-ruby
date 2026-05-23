@@ -3,8 +3,12 @@ require 'openssl'
 module Cyphera
   class FF3
     def initialize(key, tweak, alphabet = '0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ')
-      raise ArgumentError, "Key must be 16, 24, or 32 bytes" unless [16, 24, 32].include?(key.bytesize)
-      raise ArgumentError, "Tweak must be exactly 8 bytes" unless tweak.bytesize == 8
+      unless [16, 24, 32].include?(key.bytesize)
+        raise ArgumentError, "invalid key length: #{key.bytesize} (expected 16, 24, or 32)"
+      end
+      unless tweak.bytesize == 8
+        raise ArgumentError, "invalid tweak length: #{tweak.bytesize} (expected 8)"
+      end
       raise ArgumentError, "Alphabet must have >= 2 characters" if alphabet.length < 2
 
       @key = key.reverse
@@ -44,7 +48,9 @@ module Cyphera
     private
 
     def to_digits(s)
-      s.each_char.map { |c| @char_map.fetch(c) { raise ArgumentError, "Character '#{c}' not in alphabet" } }
+      s.each_char.with_index.map do |c, i|
+        @char_map.fetch(c) { raise ArgumentError, "invalid char '#{c}' at position #{i}" }
+      end
     end
 
     def from_digits(d)
@@ -171,7 +177,7 @@ module Cyphera
   class FF31
     def initialize(key, tweak, alphabet = '0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ')
       unless tweak.bytesize == 7
-        raise ArgumentError, "FF3-1 tweak must be exactly 7 bytes (56 bits)"
+        raise ArgumentError, "invalid tweak length: #{tweak.bytesize} (expected 7)"
       end
       @inner = FF3.new(key, FF31.expand_tweak(tweak), alphabet)
     end

@@ -3,7 +3,9 @@ require 'openssl'
 module Cyphera
   class FF1
     def initialize(key, tweak, alphabet = '0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ')
-      raise ArgumentError, "Key must be 16, 24, or 32 bytes" unless [16, 24, 32].include?(key.bytesize)
+      unless [16, 24, 32].include?(key.bytesize)
+        raise ArgumentError, "invalid key length: #{key.bytesize} (expected 16, 24, or 32)"
+      end
       raise ArgumentError, "Alphabet must have >= 2 characters" if alphabet.length < 2
 
       @key = key
@@ -29,7 +31,9 @@ module Cyphera
     private
 
     def to_digits(s)
-      s.each_char.map { |c| @char_map.fetch(c) { raise ArgumentError, "Character '#{c}' not in alphabet" } }
+      s.each_char.with_index.map do |c, i|
+        @char_map.fetch(c) { raise ArgumentError, "invalid char '#{c}' at position #{i}" }
+      end
     end
 
     def from_digits(d)

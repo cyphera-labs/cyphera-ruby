@@ -88,7 +88,7 @@ class TestSDK < Minitest::Test
 
   def test_access_no_matching_header_raises
     err = assert_raises(ArgumentError) { @c.access('zzznotaheader') }
-    assert_match(/No matching header/, err.message)
+    assert_equal 'no matching header found', err.message
   end
 
   def test_access_with_explicit_configuration_name
@@ -99,6 +99,6 @@ class TestSDK < Minitest::Test
 
   def test_access_with_explicit_configuration_rejects_irreversible
     err = assert_raises(ArgumentError) { @c.access('whatever', 'ssn_hash') }
-    assert_match(/not reversible/, err.message)
+    assert_equal "cannot reverse 'ssn_hash' — hash is irreversible", err.message
   end
 end
