@@ -107,9 +107,11 @@ module Cyphera
         end
 
         @configurations[name] = {
+          'name' => name,
           'engine' => cfg.fetch('engine', 'ff1'),
           'alphabet' => resolve_alphabet(cfg['alphabet']),
           'key_ref' => cfg['key_ref'],
+          'tweak' => cfg['tweak'],
           'header' => header,
           'header_enabled' => header_enabled,
           'header_length' => cfg.fetch('header_length', 3).to_i,
@@ -176,20 +178,47 @@ module Cyphera
       $stderr.puts "WARNING: engine 'ff3' is deprecated and cryptographically weak — migrate to 'ff31' (FF3-1)."
     end
 
+    # Resolve and validate the configuration-level tweak for an FPE engine.
+    # FF3 requires exactly 8 bytes and FF3-1 requires exactly 7 — missing
+    # → hard error with the canonical spec message; no silent zero-fill.
+    # FF1 accepts an empty or arbitrary-length tweak per NIST SP 800-38G.
+    def resolve_tweak(configuration)
+      raw = configuration['tweak']
+      engine = configuration['engine']
+      name = configuration['name']
+      case engine
+      when 'ff3'
+        if raw.nil? || raw.empty?
+          raise ArgumentError, "configuration '#{name}' is missing required 'tweak' (FF3 needs 8 bytes)"
+        end
+        [raw].pack('H*')
+      when 'ff31'
+        if raw.nil? || raw.empty?
+          raise ArgumentError, "configuration '#{name}' is missing required 'tweak' (FF3-1 needs 7 bytes)"
+        end
+        [raw].pack('H*')
+      else
+        # FF1 — empty tweak is fine, but allow a configured one if supplied.
+        return '' if raw.nil? || raw.empty?
+        [raw].pack('H*')
+      end
+    end
+
     def protect_fpe(value, configuration)
       key = resolve_key(configuration['key_ref'])
       alphabet = configuration['alphabet']
       encryptable, positions, chars = extract_passthroughs(value, alphabet)
       raise ArgumentError, 'no encryptable characters in input' if encryptable.empty?
 
+      tweak = resolve_tweak(configuration)
       encrypted = case configuration['engine']
       when 'ff3'
         warn_ff3_deprecated
-        FF3.new(key, "\x00" * 8, alphabet).encrypt(encryptable)
+        FF3.new(key, tweak, alphabet).encrypt(encryptable)
       when 'ff31'
-        FF31.new(key, "\x00" * 7, alphabet).encrypt(encryptable)
+        FF31.new(key, tweak, alphabet).encrypt(encryptable)
       else
-        FF1.new(key, '', alphabet).encrypt(encryptable)
+        FF1.new(key, tweak, alphabet).encrypt(encryptable)
       end
 
       result = reinsert_passthroughs(encrypted, positions, chars)
@@ -208,14 +237,15 @@ module Cyphera
 
       encryptable, positions, chars = extract_passthroughs(protected_value, alphabet)
 
+      tweak = resolve_tweak(configuration)
       decrypted = case configuration['engine']
       when 'ff3'
         warn_ff3_deprecated
-        FF3.new(key, "\x00" * 8, alphabet).decrypt(encryptable)
+        FF3.new(key, tweak, alphabet).decrypt(encryptable)
       when 'ff31'
-        FF31.new(key, "\x00" * 7, alphabet).decrypt(encryptable)
+        FF31.new(key, tweak, alphabet).decrypt(encryptable)
       else
-        FF1.new(key, '', alphabet).decrypt(encryptable)
+        FF1.new(key, tweak, alphabet).decrypt(encryptable)
       end
 
       reinsert_passthroughs(decrypted, positions, chars)
